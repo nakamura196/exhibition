@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <link rel="stylesheet" type="text/css" href="assets/thirdparty/jquery-mosaic/jquery.mosaic.css"/>
+
+  <script
+  src="//code.jquery.com/jquery-3.3.1.min.js"
+  integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+  crossorigin="anonymous"></script>
+
+  <title>IIIF Curation</title>
+
+  <script src="./assets/js/main.js"></script>
+
+
+  <script type="text/javascript" src="assets/thirdparty/jquery-mosaic/jquery.mosaic.js"></script>
+
+  <style>
+  .pagetop {
+    display: none;
+    position: fixed;
+    bottom: 30px;
+    right: 15px;
+  }
+  .pagetop a {
+    display: block;
+    background-color: #ccc;
+    text-align: center;
+    color: #222;
+    font-size: 12px;
+    text-decoration: none;
+    padding: 5px 10px;
+    filter:alpha(opacity=80);
+    -moz-opacity: 0.8;
+    opacity: 0.8;
+  }
+  .pagetop a:hover {
+    display: block;
+    background-color: #b2d1fb;
+    text-align: center;
+    color: #fff;
+    font-size: 12px;
+    text-decoration: none;
+    padding:5px 10px;
+    filter:alpha(opacity=80);
+    -moz-opacity: 0.8;
+    opacity: 0.8;
+  }
+  </style>
+
+
+  <script>asset('./');</script>
+
+</head>
+<body style="background-color: #eee;">
+
+  <script>header('./');</script>
+
+  <div class="container-fluid py-2 my-5">
+
+    <h3 class="mb-5 text-center"><span id="n"></span>件を表示します</h3>
+
+    <!--
+
+    <div class="text-center" id="loading">
+    <img src="https://img.buzzfeed.com/buzzfeed-static/static/enhanced/web05/2012/4/24/16/anigif_enhanced-buzz-10731-1335299292-14.gif" class="img-fluid"/>
+  </div>
+
+-->
+
+<div id="myMosaic"></div>
+
+<div class="text-center" id="loading">
+  <img src="https://img.buzzfeed.com/buzzfeed-static/static/enhanced/web05/2012/4/24/16/anigif_enhanced-buzz-10731-1335299292-14.gif" class="img-fluid"/>
+</div>
+
+</div>
+
+<p class="pagetop"><a href="#wrap">▲</a></p>
+
+<script>
+
+var id_map = {}
+var pos = 0
+
+jQuery(document).ready(function() {
+
+  init()
+
+  $.ajaxSetup({ async: false });
+
+  if(resourceUri == ""){
+    $("#loading").empty()
+    alert("Error.")
+  } else {
+
+    get_thumbs(resourceUri)
+
+    $("#loading").empty()
+
+    $("#n").append(pos)
+
+    for(var id in id_map){
+      var url = id_map[id]
+
+      var area = url.split("/")[6].split(",")
+
+      var img = $("<img>")
+      img.attr("src", url)
+      img.attr("data-high-res-image-src", url)
+      img.attr("width", area[2])
+      img.attr("height", area[3])
+      img.attr("onclick", "move('"+id.replace("#", "&pos=")+"')")
+      img.attr("style", "cursor: pointer")
+
+      $("#myMosaic").append(img)
+    }
+
+    setTimeout(function(){
+      $('#myMosaic').Mosaic({
+        maxRowHeight: 200,
+        innerGap : 10
+      });
+    },1000);
+
+  }
+})
+
+function get_thumbs(resourceUri){
+
+  $.getJSON( resourceUri, function( result ) {
+
+    var selections = result["selections"]
+    for(var k = 0; k < selections.length; k++){
+      var selection = selections[k]
+
+      var members = selection["members"]
+
+      var manifestUri = selection["within"]["@id"]
+
+      get_thumb(manifestUri, members, resourceUri, pos)
+    }
+
+  });
+}
+
+function get_thumb(manifestUri, members, resourceUri){
+
+  $.getJSON( manifestUri, function( manifest ) {
+
+    var canvases = manifest["sequences"][0]["canvases"]
+
+    var canvas_img_map = {}
+
+    for(var i = 0; i < canvases.length; i++){
+      var canvas = canvases[i]
+      canvas_img_map[canvas["@id"]] = canvas["images"][0]["resource"]["service"]["@id"]
+    }
+
+    for(var j = 0; j < members.length; j++){
+      var curationUri = members[j]["@id"]
+      var ids = curationUri.split("#")
+      if(ids.length != 2){
+        continue
+      }
+      var canvas_id = ids[0]
+      var area = ids[1].split("=")[1]
+      var thumb = canvas_img_map[canvas_id]+"/"+area+"/,200/0/default.jpg"
+
+      var id = $.md5(curationUri)
+
+      pos += 1
+
+      var key = resourceUri+"#"+pos
+
+      id_map[key] = thumb
+
+    }
+  });
+}
+
+function move(curation){
+  open( "http://codh.rois.ac.jp/software/iiif-curation-viewer/demo/?curation="+curation, "cr" ) ;
+}
+
+$(document).ready(function() {
+  var pagetop = $('.pagetop');
+  $(window).scroll(function () {
+    if ($(this).scrollTop() > 100) {
+      pagetop.fadeIn();
+    } else {
+      pagetop.fadeOut();
+    }
+  });
+  pagetop.click(function () {
+    $('body, html').animate({ scrollTop: 0 }, 500);
+    return false;
+  });
+});
+</script>
+</body>
+</html>

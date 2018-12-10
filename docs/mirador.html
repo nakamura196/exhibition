@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="stylesheet" type="text/css" href="mirador/css/mirador-combined.css">
+  <link rel="stylesheet" type="text/css" href="mirador/plugins/mirador-dragndrop-link-plugin/dragndrop-link.css">
+  <meta name="description" content="">
+  <meta name="author" content="">
+
+  <script
+  src="//code.jquery.com/jquery-3.3.1.min.js"
+  integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+  crossorigin="anonymous"></script>
+
+  <script src="mirador/mirador.min.js"></script>
+
+  <title>IIIF Curation</title>
+
+  <script src="./assets/js/main.js"></script>
+
+  <style>
+  #viewer {
+    display: block;
+    width: 99%;
+    height: 600px;
+    position: relative;
+  }
+  </style>
+
+
+  <script>asset('./');</script>
+
+</head>
+<body style="background-color: #eee;">
+
+  <script>header('./');</script>
+
+  <div class="container-fluid py-2 my-5">
+
+    <div class="pricing-header mx-auto text-center">
+      <h2 id="title"></h2>
+    </div>
+
+    <div class="text-center" id="loading">
+      <img src="https://img.buzzfeed.com/buzzfeed-static/static/enhanced/web05/2012/4/24/16/anigif_enhanced-buzz-10731-1335299292-14.gif" class="img-fluid"/>
+    </div>
+
+    <div class="row my-5">
+      <div class="col-md-6 mb-2">
+
+        <div class="card" style="height:600px; overflow-y:scroll;">
+          <div class="card-body">
+
+            <div class="table-responsive">
+              <table class="table table-hover" id="table">
+                <thead id="thead"></thead>
+                <tbody id="resourceListBody">
+                </tbody>
+                <tfoot id="tfoot"></tfoot>
+              </table>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+      <div class="col-md-6">
+        <div id="viewer"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>footer('./');</script>
+
+  <script>
+
+  var id_map = {}
+  var zones = {}
+
+  jQuery(document).ready(function() {
+
+    init()
+
+    $.ajaxSetup({ async: false });
+
+    if(resourceUri == ""){
+      $("#loading").empty()
+      alert("Error.")
+    } else {
+
+      get_thumbs(resourceUri)
+
+      var array = new Array();
+
+      $.ajax({
+        url:resourceUri,
+        type:'GET'
+      })
+      // Ajaxリクエストが成功した時発動
+      .done( (result) => {
+
+        $("#title").text(result["label"])
+
+        var selections = result["selections"]
+
+        var fields = []
+
+        for(var k = 0; k < selections.length; k++){
+          var selection = selections[k]
+          var members = selection["members"]
+          for(var i = 0; i < members.length; i++){
+            var obj = members[i]
+            var metadata = obj["metadata"]
+
+            if(metadata != null){
+              for(var j = 0; j < metadata.length; j++){
+                var label = metadata[j]["label"]
+                if(label != null && fields.indexOf(label) == -1){
+                  fields.push(label)
+                }
+              }
+            }
+          }
+        }
+
+        var manifest2;
+
+        for(var k = 0; k < selections.length; k++){
+
+          var selection = selections[k]
+
+          var within = selection["within"]
+          var manifest = within["@id"]
+
+          if(k == 0){
+            manifest2 = manifest
+            initMirador(manifest2)
+          }
+
+          if(manifest2 != manifest){
+            continue
+          }
+
+          var within_label = within["label"]
+
+          var members = selection["members"]
+
+          for(var i = 0; i < members.length; i++){
+            var tr = $("<tr>")
+            $("#resourceListBody").append(tr)
+
+            var obj = members[i]
+
+            var curationUri = obj["@id"]
+
+            var td = $("<td>");
+            tr.append(td)
+
+            td = $("<td>");
+            tr.append(td)
+
+            var id = $.md5(curationUri)
+            if(id_map[id]){
+              var img = $("<img>")
+              td.append(img)
+              img.attr("src", id_map[id])
+              img.attr("width", "90px")
+              img.attr("height", "90px")
+              img.attr("class", "z-depth-1")
+
+              var attr = curationUri.replace("#", "")
+              tr.attr("onclick", "move(\""+attr+"\")")
+            }
+
+            metadata = obj["metadata"]
+
+            var arr = []
+            for(var j = 0; j < fields.length; j++){
+              arr.push("")
+            }
+
+            if(metadata != null){
+              for(var j = 0; j < metadata.length; j++){
+                var m = metadata[j]
+                var index = $.inArray(m.label, fields)
+                var value = m.value
+                var type = typeof value
+                if(type == "object"){
+                  arr[index] = value.join(',')
+                } else if(type == "string"){
+                  arr[index] = value
+                }
+              }
+            }
+
+            for(var j = 0; j < arr.length; j++){
+              var td = $("<td>")
+              tr.append(td)
+              td.append(arr[j])
+            }
+
+            var zone = {}
+            zones[attr] = zone
+            var tmp = curationUri.split("#")
+
+            zone.canvasID = tmp[0]
+            var tmp2 = tmp[1].split("=")[1].split(",")
+            zone.x = Number(tmp2[0])
+            zone.y = Number(tmp2[1])
+            zone.dx = Number(tmp2[2])
+            zone.dy = Number(tmp2[3])
+
+          }
+
+        }
+
+        $('img').on('error', function(){
+          $(this).attr('src','https://www.freeiconspng.com/uploads/no-image-icon-6.png').removeClass("z-depth-1");
+        });
+
+        tr = $("<tr>")
+
+
+        var td = $("<th>")
+        tr.append(td)
+
+        td = $("<th>")
+        tr.append(td)
+        td.append("Thumb")
+
+        for(var j = 0; j < fields.length; j++){
+          var td = $("<th>")
+          tr.append(td)
+          td.append(fields[j])
+        }
+
+        $("#thead").append(tr)
+
+        // DataTable
+        var table = $('#table').DataTable({
+          "iDisplayLength" : 25,
+          fixedColumns: true
+        });
+
+        // Apply the search
+        table.columns().every( function () {
+          var that = this;
+
+          $( 'input', this.header() ).on( 'keyup change', function () {
+            if ( that.search() !== this.value ) {
+              that
+              .search( this.value )
+              .draw();
+            }
+          } );
+        } );
+
+        table.on('order.dt search.dt', function() {
+          table.column(0, {
+            search : 'applied',
+            order : 'applied'
+          }).nodes().each(function(cell, i) {
+            cell.innerHTML = i + 1;
+          });
+        }).draw();
+      })
+      // Ajaxリクエストが失敗した時発動
+      .fail( (data) => {
+        alert(data.statusText);
+      })
+      // Ajaxリクエストが成功・失敗どちらでも発動
+      .always( (data) => {
+        $("#loading").empty()
+      });
+    }
+  })
+
+  function get_thumbs(resourceUri){
+
+    $.getJSON( resourceUri, function( result ) {
+
+      var selections = result["selections"]
+      for(var k = 0; k < selections.length; k++){
+        var selection = selections[k]
+
+        var members = selection["members"]
+
+        var manifestUri = selection["within"]["@id"]
+
+        get_thumb(manifestUri, members)
+      }
+
+    });
+  }
+
+  function initMirador(manifest){
+    miradorInstance = Mirador(
+      {
+        "id": "viewer",
+        "layout": "1x1",
+        "data": [
+          { "manifestUri": manifest, "location": ""}
+        ],
+        "windowSettings": {
+          "sidePanel": true,
+          "canvasControls": {
+            "annotations": {
+              "annotationState": "on",
+              "annotationCreation": false
+            }
+          }
+        },
+        "windowObjects": [{
+          loadedManifest: manifest,
+          viewType: "ImageView",
+          bottomPanelVisible: false
+        }],
+        "annotationEndpoint": { "name":"Local Storage", "module": "LocalStorageEndpoint" }
+      }
+    );
+  }
+
+  function get_thumb(manifestUri, members){
+
+    $.getJSON( manifestUri, function( manifest ) {
+
+      var canvases = manifest["sequences"][0]["canvases"]
+
+      var canvas_img_map = {}
+
+      for(var i = 0; i < canvases.length; i++){
+        var canvas = canvases[i]
+        canvas_img_map[canvas["@id"]] = canvas["images"][0]["resource"]["service"]["@id"]
+      }
+
+      for(var j = 0; j < members.length; j++){
+        var curationUri = members[j]["@id"]
+        var ids = curationUri.split("#")
+        if(ids.length != 2){
+          continue
+        }
+        var canvas_id = ids[0]
+        var area = ids[1].split("=")[1]
+        var thumb = canvas_img_map[canvas_id]+"/"+area+"/90,90/0/default.jpg"
+
+        var id = $.md5(curationUri)
+
+        var img = $("<img>")
+        $("#td_"+id).append(img)
+        img.attr("src", thumb)
+        img.attr("width", "90px")
+        img.attr("height", "90px")
+        img.attr("class", "z-depth-1")
+
+        id_map[id] = thumb
+
+      }
+    });
+  }
+
+  //canvasIDと領域を指定して移動
+  function move(id){
+    var zone = zones[id]
+    miradorInstance.eventEmitter.publish('SET_CURRENT_CANVAS_ID', zone.canvasID);
+    miradorInstance.eventEmitter.publish('fitBounds', {'x': zone.x, 'y': zone.y,'width': zone.dx, 'height': zone.dy});
+  }
+
+</script>
+</body>
+</html>
